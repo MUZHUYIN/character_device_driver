@@ -1,0 +1,36 @@
+# Kernel module and Kbuild outputs
+*.o
+*.ko
+*.mod
+*.mod.c
+*.mod.o
+*.a
+*.so
+*.cmd
+*.d
+*.symvers
+*.order
+.tmp_versions/
+Module.symvers
+modules.order
+
+# Device tree build outputs
+*.dtbo
+*.dtb
+
+# Local demo/tool binaries
+tools/ili9341_demo
+tools/*.exe
+
+# Editor and OS noise
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+Thumbs.db
+.DS_Store
+
+# Logs and temp files
+*.log
+*.tmp
