@@ -821,8 +821,14 @@ static long rpi5_ili9341_chr_ioctl(struct file *file, unsigned int cmd,
 static int rpi5_ili9341_chr_mmap(struct file *file, struct vm_area_struct *vma)
 {
 	struct rpi5_ili9341 *lcd = file->private_data;
+	unsigned long requested = vma->vm_end - vma->vm_start;
 
-	if (vma->vm_end - vma->vm_start > lcd->info->screen_size)
+	/*
+	 * Userspace mmap length is rounded up to a page-sized VMA. Accept
+	 * that rounded size as long as it stays within the page-aligned
+	 * framebuffer allocation window.
+	 */
+	if (requested > PAGE_ALIGN(lcd->info->screen_size))
 		return -EINVAL;
 
 	return remap_vmalloc_range(vma, lcd->vmem, 0);
@@ -930,11 +936,12 @@ static int rpi5_ili9341_probe(struct spi_device *spi)
 	lcd->bgr = device_property_read_bool(dev, "bgr");
 	lcd->sync_to_te = device_property_read_bool(dev, "sync-to-te");
 
-	lcd->vmem = vzalloc(ILI9341_VMEM_SIZE);
+	lcd->vmem = vmalloc_user(ILI9341_VMEM_SIZE);
 	if (!lcd->vmem) {
 		ret = -ENOMEM;
 		goto err_release_fb;
 	}
+
 
 	lcd->txbuf = vzalloc(ILI9341_TXBUF_SIZE);
 	if (!lcd->txbuf) {
@@ -946,7 +953,11 @@ static int rpi5_ili9341_probe(struct spi_device *spi)
 	info->screen_size = ILI9341_VMEM_SIZE;
 	info->fbops = &rpi5_ili9341_fb_ops;
 	info->pseudo_palette = lcd->pseudo_palette;
-	info->flags = FBINFO_VIRTFB | FBINFO_FLAG_DEFAULT;
+	/*
+	 * Raspberry Pi 6.12 headers do not expose FBINFO_FLAG_DEFAULT,
+	 * and this virtual framebuffer only needs the VIRT flag here.
+	 */
+	info->flags = FBINFO_VIRTFB;
 	rpi5_ili9341_setup_fix(&info->fix);
 	rpi5_ili9341_setup_var(&info->var);
 	rpi5_ili9341_update_geometry(lcd, rotation);
@@ -1046,6 +1057,7 @@ static const struct of_device_id rpi5_ili9341_of_match[] = {
 MODULE_DEVICE_TABLE(of, rpi5_ili9341_of_match);
 
 static const struct spi_device_id rpi5_ili9341_id[] = {
+	{ "codex,rpi5-ili9341", 0 },
 	{ "rpi5_ili9341", 0 },
 	{ "ili9341", 0 },
 	{ }
