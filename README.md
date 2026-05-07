@@ -1,6 +1,6 @@
 # 基于树莓派 5 的 SPI 字符设备驱动程序开发
 
-这是一个面向树莓派 5 的完整 SPI LCD 驱动项目，目标是把 `ILI9341` 320x240 TFT 屏集成进 Linux 内核显示链路，同时保留一个便于实验和课程演示的字符设备接口。
+这是一个面向树莓派 5 的完整 SPI LCD 驱动项目，目标是把 `ILI9341` 240x320 TFT 屏集成进 Linux 内核显示链路，同时保留一个便于实验和课程演示的字符设备接口。
 
 项目提供两条用户空间访问路径：
 
@@ -9,12 +9,11 @@
 
 ## 功能特性
 
-- 基于 `spi_driver` 的 ILI9341 内核模块，面向树莓派 5 SPI0。
-- 内核级帧缓冲显存，像素格式为 `RGB565`。
+- 基于 `spi_driver` 的 ILI9341 内核模块，适配树莓派 5 SPI0。
+- 默认竖屏显示，分辨率 `240x320`，像素格式为 `RGB565`。
 - 自定义字符设备接口，支持整帧刷新和局部刷新。
 - `fb_deferred_io` 延迟刷新路径，适合 `/dev/fbX` 的 `mmap` 绘图。
 - 可选 TE GPIO 中断同步，降低撕裂风险。
-- 提供设备树 overlay、用户态 demo、DKMS 配置和构建脚本。
 - 已兼容树莓派 `6.12.y` 内核中的 `FBINFO_FLAG_DEFAULT` 差异。
 - 已修复字符设备 `mmap()` 页对齐和 `vmalloc_user()` 映射问题。
 
@@ -36,7 +35,7 @@
 
 ## 适用硬件
 
-本项目只适用于“真正的 SPI 接口 ILI9341 显示屏”，模块通常会直接暴露以下显示引脚：
+本项目适用于“真正的 SPI 接口 ILI9341 显示屏”。模块通常会直接暴露以下显示引脚：
 
 - `VCC`
 - `GND`
@@ -49,35 +48,43 @@
 - 可选 `MISO`
 - 可选 `TE`
 
-### 已确认不适用的模块
-
-`LCDWiki MRB2801` 这类模块不适用于本项目。它虽然使用 ILI9341 控制器，但显示接口是 `8-bit/16-bit 并口`，不是 SPI 显示总线；板上的 `MOSI/MISO/CLK` 引脚是触摸芯片的 SPI，不是 LCD 显示数据引脚。
-
-如果你手上的屏幕页面写的是以下关键词，就不应该用这个仓库直接点屏：
+如果模块页面写的是以下关键词，就不应直接用本仓库点屏：
 
 - `8-bit parallel`
 - `16-bit parallel`
 - `8080 interface`
 - `MCU parallel`
 
-## 参考接线
+## 实测默认接线
 
-以下是 `overlay/rpi5-ili9341-spi0.dts` 的示例接线，GPIO 编号使用 BCM 编号：
+以下配置对应当前仓库默认 overlay，GPIO 编号使用 BCM 编号：
 
 | LCD 引脚 | 树莓派 5 | 说明 |
 | --- | --- | --- |
 | `VCC` | `3V3` | 模块供电 |
 | `GND` | `GND` | 地 |
+| `LED/BL` | `3V3` | 背光直连，先确保稳定点亮 |
 | `SCK` | `GPIO11 / SPI0_SCLK` | SPI 时钟 |
 | `MOSI` | `GPIO10 / SPI0_MOSI` | SPI 数据输出 |
-| `MISO` | 可不接 | 多数 ILI9341 显示不用 |
 | `CS` | `GPIO8 / SPI0_CE0` | SPI 片选 |
 | `DC` | `GPIO24` | 数据/命令选择 |
 | `RST` | `GPIO25` | 硬件复位 |
-| `LED` | `GPIO18` | 背光控制 |
-| `TE` | `GPIO23` | 可选撕裂同步输入 |
 
 注意：`GPIO24` 不是物理针脚 `24`，`GPIO25` 也不是物理针脚 `25`。排线时请核对 BCM 编号和 40Pin 实体引脚表。
+
+当前最终默认接法中，`LED/BL` 直接接 `3V3`，不经过 GPIO 控制。这意味着背光会常亮，但能最大程度保证点屏稳定性。
+
+## 默认显示配置
+
+当前仓库默认使用这组已实测点亮的配置：
+
+- `spi-max-frequency = <16000000>;`
+- `dc-gpios = <&rp1_gpio 24 0>;`
+- `reset-gpios = <&rp1_gpio 25 1>;`
+- `rotation = <0>;`
+- `bgr;`
+
+这组配置默认输出竖屏 `240x320`。
 
 ## 构建
 
@@ -133,17 +140,17 @@ ls -l /dev/rpi5_ili9341
 ```bash
 make tools
 sudo ./tools/ili9341_demo info
+sudo ./tools/ili9341_demo clear f800
 sudo ./tools/ili9341_demo bars
 sudo ./tools/ili9341_demo gradient
-sudo ./tools/ili9341_demo solid-blue
-sudo ./tools/ili9341_demo clear 0000
-sudo ./tools/ili9341_demo rotate 270
 ```
 
-如果系统里已经有其它 framebuffer，请先用下面这条命令确认本驱动对应的 `fb` 编号：
+如果你想切换方向：
 
 ```bash
-dmesg | grep rpi5_ili9341
+sudo ./tools/ili9341_demo rotate 90
+sudo ./tools/ili9341_demo rotate 180
+sudo ./tools/ili9341_demo rotate 270
 ```
 
 ## 字符设备接口
@@ -160,30 +167,14 @@ dmesg | grep rpi5_ili9341
 - `RPI5_ILI9341_IOC_SET_BACKLIGHT`：开关背光 GPIO。
 - `RPI5_ILI9341_IOC_WAIT_TE`：等待一次 TE 中断。
 
-## 设备树说明
-
-仓库里的 overlay 是“项目默认示例”，并不是所有模块都能原样即用。不同 SPI 模块常见差异包括：
-
-- `dc-gpios` 极性不同
-- `reset-gpios` 极性不同
-- `led-gpios` 极性不同
-- 最高稳定 SPI 频率不同
-- 模块物理安装方向不同
-
-如果点屏失败，优先尝试：
-
-1. 把 `spi-max-frequency` 从 `32000000` 降到 `16000000`
-2. 单独翻转 `dc-gpios`
-3. 单独翻转 `reset-gpios`
-4. 调整 `rotation = <0|90|180|270>;`
+说明：当前默认接线把背光直接接到了 `3V3`，所以如果没有额外接入 `led-gpios`，`SET_BACKLIGHT` 可能返回 `-EOPNOTSUPP`，这是正常现象。
 
 ## 调试建议
 
-- 黑屏：优先检查 `DC`、`RST`、`LED`、`CS` 接线。
-- 白屏：优先检查屏幕是否真的是 SPI 显示模块，而不是并口模块。
-- 花屏：降低 `spi-max-frequency`。
-- 方向错误：修改 `rotation` 或运行 `./tools/ili9341_demo rotate 90`。
-- 背光不亮：先临时把 `LED` 引脚直接接 `3V3` 验证硬件。
+- 白屏：优先检查屏幕是否真的是 SPI 显示模块，以及 `DC/RST/CS` 接线是否正确。
+- 黑屏但背光不亮：优先检查 `LED/BL` 是否已接到 `3V3`。
+- 花屏：把 `spi-max-frequency` 从 `16000000` 再降到 `8000000`。
+- 方向错误：修改 `rotation`，或者用 `./tools/ili9341_demo rotate <角度>` 运行时切换。
 
 ## 参考资料
 
@@ -191,4 +182,3 @@ dmesg | grep rpi5_ili9341
 - [Linux framebuffer 文档](https://docs.kernel.org/fb/index.html)
 - [Raspberry Pi Linux 设备树仓库](https://github.com/raspberrypi/linux)
 - [ILI9341 数据手册](https://www.buydisplay.com/download/ic/ILI9341.pdf)
-- [LCDWiki MRB2801 页面](https://www.lcdwiki.com/zh/2.8inch_16BIT_Module_ILI9341_SKU:MRB2801)
