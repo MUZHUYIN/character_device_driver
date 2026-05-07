@@ -1,13 +1,21 @@
 # 上板与验证步骤
 
-## 1. 先确认屏幕类型
+## 1. 接线
 
-这个项目只适用于 SPI 显示接口的 ILI9341 模块。  
-如果你的模块页面写的是 `8-bit/16-bit parallel`、`8080 interface`、`MCU interface`，那它不适合本仓库。
+先按最小系统接线：
 
-已确认不适用的示例：
+- `VCC -> 3V3`
+- `GND -> GND`
+- `LED/BL -> 3V3`
+- `SCK -> GPIO11`
+- `MOSI -> GPIO10`
+- `CS -> GPIO8`
+- `DC -> GPIO24`
+- `RST -> GPIO25`
 
-- `LCDWiki MRB2801`
+先不要接 `MISO`、`TE`、触摸和 TF 卡相关引脚。
+
+说明：当前项目最终默认方案里，`LED/BL` 保持直接接 `3V3`。这样背光不会由驱动控制，但点亮最稳定，也最适合课程演示和项目交付。
 
 ## 2. 安装依赖
 
@@ -60,30 +68,33 @@ dmesg | grep -i rpi5_ili9341
 
 ```bash
 sudo ./tools/ili9341_demo info
-sudo ./tools/ili9341_demo solid-blue
+sudo ./tools/ili9341_demo clear f800
 sudo ./tools/ili9341_demo bars
 sudo ./tools/ili9341_demo gradient
 ```
 
+当前默认方向是竖屏 `240x320`。如果想切到其他方向：
+
+```bash
+sudo ./tools/ili9341_demo rotate 90
+sudo ./tools/ili9341_demo rotate 180
+sudo ./tools/ili9341_demo rotate 270
+```
+
 ## 8. 常见问题
 
-### 一直白屏
+### 白屏
 
-- 优先确认这块屏是不是“真正的 SPI 显示模块”
-- 核对 `CS/DC/RST` 接线
-- 核对 BCM 编号和实体针脚号没有混淆
+- 确认屏幕是“真正的 SPI ILI9341 模块”
+- 检查 `CS/DC/RST` 接线
+- 尝试把 `spi-max-frequency` 降到 `8000000`
 
 ### 黑屏但背光不亮
 
-- 先检查 `LED` 接线
-- 临时把 `LED` 直接接 `3V3` 验证背光硬件
-- 再回头调整 `led-gpios` 极性
-
-### 花屏
-
-- 把 `spi-max-frequency` 从 `32000000` 降到 `16000000`
+- 先检查 `LED/BL` 是否接到了 `3V3`
+- 当前默认方案不通过 GPIO 控背光
 
 ### 方向不对
 
-- 修改 `overlay/rpi5-ili9341-spi0.dts` 里的 `rotation`
-- 或运行 `./tools/ili9341_demo rotate 0|90|180|270`
+- 修改 `overlay/rpi5-ili9341-spi0.dts` 的 `rotation`
+- 或用 `./tools/ili9341_demo rotate <角度>` 运行时切换

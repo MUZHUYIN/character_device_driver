@@ -876,7 +876,7 @@ static int rpi5_ili9341_probe(struct spi_device *spi)
 	struct device *dev = &spi->dev;
 	struct fb_info *info;
 	struct rpi5_ili9341 *lcd;
-	u32 rotation = 90;
+	u32 rotation = 0;
 	int ret;
 
 	info = framebuffer_alloc(sizeof(*lcd), dev);
